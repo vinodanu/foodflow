@@ -1,0 +1,21 @@
+import {test,expect,type APIRequestContext} from '@playwright/test';
+async function signIn(page:any,username:string){await page.getByRole('button',{name:'Account',exact:true}).click();await page.getByLabel('Username',{exact:true}).fill(username);await page.getByLabel('Password',{exact:true}).fill('FoodFlow-demo-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByRole('button',{name:username,exact:true}).first()).toBeVisible();}
+async function post(request:APIRequestContext,path:string,body:unknown,key?:string){const csrf=await (await request.get('/api/v1/auth/csrf')).json();return request.post('/api/v1'+path,{data:body,headers:{[csrf.headerName]:csrf.token,...(key?{'Idempotency-Key':key}:{})}});}
+test('real checkout persists and operations can deliver it',async({page,browser})=>{
+ await page.goto('/',{waitUntil:'domcontentloaded'});await expect(page.locator('.restaurant-card')).toHaveCount(6);await signIn(page,'customer');
+ await page.getByRole('button',{name:/Healthy$/}).click();await page.getByRole('button',{name:/The Green Bowl/}).click();await page.getByRole('button',{name:'ADD +',exact:true}).first().click();await page.getByRole('button',{name:/View bag/}).click();await expect(page.locator('.grand')).toContainText('284');await page.getByRole('button',{name:'Continue to checkout'}).click();await page.getByLabel('Delivery address').fill('Flat 201, Road 12, Jubilee Hills, Hyderabad 500033');await page.getByRole('button',{name:/Place demo order/}).click();await expect(page.getByRole('heading',{name:'Order received!'})).toBeVisible();
+ const saved=(await (await page.request.get('/api/v1/orders')).json())[0];expect(saved.total).toBe('284.00');
+ await page.reload();await page.getByRole('button',{name:'My order',exact:true}).click();await expect(page.getByText(new RegExp(saved.id))).toBeVisible();
+ const admin=await browser.newContext({baseURL:'http://127.0.0.1:5176'});const adminPage=await admin.newPage();await adminPage.goto('/');await signIn(adminPage,'admin');await adminPage.getByRole('button',{name:'Operations',exact:true}).click();await expect(adminPage.getByRole('heading',{name:'Order queue'})).toBeVisible();
+ for(let i=0;i<5;i++){const current=await (await admin.request.get('/api/v1/orders/'+saved.id)).json();const response=await post(admin.request,'/orders/'+saved.id+'/demo-advance',{status:'DEMO',expectedVersion:current.version,note:'Browser demo test'});expect(response.ok()).toBe(true);}
+ await page.getByRole('button',{name:'Refresh order status'}).click();await expect(page.getByRole('heading',{name:'Delivered. Enjoy!'})).toBeVisible();await admin.close();
+});
+test('API enforces authentication, CSRF, idempotency and ownership',async({page,browser})=>{
+ await page.goto('/');expect((await page.request.get('/api/v1/orders')).status()).toBe(401);await signIn(page,'customer');
+ const input={restaurantId:'green',address:'Flat 102, Jubilee Hills, Hyderabad 500033',area:'Jubilee Hills, Hyderabad',items:[{dishId:'bowl',quantity:1}]};const key=crypto.randomUUID();
+ expect((await page.request.post('/api/v1/orders',{data:input,headers:{'Idempotency-Key':key}})).status()).toBe(403);
+ const first=await (await post(page.request,'/orders',input,key)).json();const second=await (await post(page.request,'/orders',input,key)).json();expect(first.id).toBe(second.id);expect((await post(page.request,'/orders',{...input,items:[{dishId:'bowl',quantity:2}]},key)).status()).toBe(409);
+ expect((await post(page.request,'/orders/'+first.id+'/demo-advance',{status:'DEMO',expectedVersion:0,note:'Forbidden'})).status()).toBe(403);
+ const other=await browser.newContext({baseURL:'http://127.0.0.1:5176'});const p=await other.newPage();await p.goto('/');await signIn(p,'customer2');expect((await other.request.get('/api/v1/orders/'+first.id)).status()).toBe(404);await other.close();
+});
+test('mobile remains responsive with API catalog',async({page})=>{await page.setViewportSize({width:390,height:844});await page.goto('/');await expect(page.locator('.restaurant-card')).toHaveCount(6);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.getByLabel('Search restaurants or dishes').fill('no-such-dish');await expect(page.getByRole('heading',{name:'No kitchens found'})).toBeVisible();});

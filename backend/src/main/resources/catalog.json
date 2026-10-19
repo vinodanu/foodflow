@@ -1,0 +1,179 @@
+[
+  {
+    "id": "green",
+    "name": "The Green Bowl",
+    "category": "Healthy",
+    "image": "/images/photo-1512621776951-a57141f2eefd.webp",
+    "rating": "4.8",
+    "time": "20–30",
+    "price": 250,
+    "tag": "FEEL-GOOD FOOD",
+    "menu": [
+      {
+        "id": "bowl",
+        "name": "Harvest grain bowl",
+        "description": "Roasted vegetables, brown rice, avocado & lemon tahini.",
+        "price": 249,
+        "veg": true
+      },
+      {
+        "id": "salad",
+        "name": "Summer crunch salad",
+        "description": "Garden greens, chickpeas, cucumber & citrus dressing.",
+        "price": 199,
+        "veg": true
+      },
+      {
+        "id": "smoothie",
+        "name": "Berry happy smoothie",
+        "description": "Berries, banana and creamy oat milk.",
+        "price": 149,
+        "veg": true
+      }
+    ]
+  },
+  {
+    "id": "pizza",
+    "name": "Slice of Heaven",
+    "category": "Pizza",
+    "image": "/images/photo-1579751626657-72bc17010498.webp",
+    "rating": "4.7",
+    "time": "25–35",
+    "price": 350,
+    "tag": "WOOD-FIRED FAVOURITES",
+    "menu": [
+      {
+        "id": "margherita",
+        "name": "Classic margherita",
+        "description": "Wood-fired crust, tomato, fresh mozzarella & basil.",
+        "price": 329,
+        "veg": true
+      },
+      {
+        "id": "mushroom",
+        "name": "Truffle mushroom pizza",
+        "description": "Roasted mushrooms, mozzarella & truffle oil.",
+        "price": 399,
+        "veg": true
+      },
+      {
+        "id": "pepperoni",
+        "name": "Pepperoni pizza",
+        "description": "Tomato, mozzarella and smoky pepperoni.",
+        "price": 429,
+        "veg": false
+      }
+    ]
+  },
+  {
+    "id": "biryani",
+    "name": "Biryani & Beyond",
+    "category": "Biryani",
+    "image": "/images/photo-1563379091339-03b21ab4a4f8.webp",
+    "rating": "4.9",
+    "time": "30–40",
+    "price": 300,
+    "tag": "NEIGHBOURHOOD FAVOURITE",
+    "menu": [
+      {
+        "id": "chicken",
+        "name": "Hyderabadi chicken biryani",
+        "description": "Slow-cooked chicken, fragrant basmati & cooling raita.",
+        "price": 299,
+        "veg": false
+      },
+      {
+        "id": "paneer",
+        "name": "Paneer dum biryani",
+        "description": "Spiced paneer, saffron rice, caramelised onions.",
+        "price": 269,
+        "veg": true
+      }
+    ]
+  },
+  {
+    "id": "burger",
+    "name": "Burger Theory",
+    "category": "Burgers",
+    "image": "/images/photo-1568901346375-23c9450c58cd.webp",
+    "rating": "4.6",
+    "time": "20–30",
+    "price": 250,
+    "tag": "STACKED WITH FLAVOUR",
+    "menu": [
+      {
+        "id": "burger",
+        "name": "The signature burger",
+        "description": "Crispy chicken, house sauce, pickles & a toasted bun.",
+        "price": 249,
+        "veg": false
+      },
+      {
+        "id": "vegburger",
+        "name": "Garden stack",
+        "description": "Crunchy vegetable patty, cheddar & fresh lettuce.",
+        "price": 219,
+        "veg": true
+      },
+      {
+        "id": "fries",
+        "name": "Seasoned fries",
+        "description": "Golden potato fries with our signature seasoning.",
+        "price": 119,
+        "veg": true
+      }
+    ]
+  },
+  {
+    "id": "south",
+    "name": "Dosa District",
+    "category": "South Indian",
+    "image": "/images/photo-1630383249896-424e482df921.webp",
+    "rating": "4.8",
+    "time": "15–25",
+    "price": 200,
+    "tag": "BREAKFAST, ALL DAY",
+    "menu": [
+      {
+        "id": "dosa",
+        "name": "Classic masala dosa",
+        "description": "Crisp rice crepe, potato masala, chutneys & sambar.",
+        "price": 149,
+        "veg": true
+      },
+      {
+        "id": "idli",
+        "name": "Steamed idli",
+        "description": "Four soft idlis, coconut chutney & hot sambar.",
+        "price": 99,
+        "veg": true
+      }
+    ]
+  },
+  {
+    "id": "sweet",
+    "name": "Little Sweet Things",
+    "category": "Desserts",
+    "image": "/images/photo-1578985545062-69928b1d9587.webp",
+    "rating": "4.7",
+    "time": "20–30",
+    "price": 250,
+    "tag": "A LITTLE TREAT",
+    "menu": [
+      {
+        "id": "cake",
+        "name": "Chocolate cloud cake",
+        "description": "Rich chocolate sponge with silky ganache.",
+        "price": 189,
+        "veg": true
+      },
+      {
+        "id": "brownie",
+        "name": "Warm walnut brownie",
+        "description": "Fudgy chocolate brownie with toasted walnuts.",
+        "price": 149,
+        "veg": true
+      }
+    ]
+  }
+]

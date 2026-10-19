@@ -1,0 +1,34 @@
+name: foodflow
+services:
+  mysql:
+    image: mysql:8.4.7
+    environment:
+      MYSQL_DATABASE: foodflow
+      MYSQL_USER: foodflow
+      MYSQL_PASSWORD: ${DB_PASSWORD:-local-foodflow-only}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-foodflow-root-only}
+    volumes: ["mysql-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+  backend:
+    build: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      DB_URL: jdbc:mysql://mysql:3306/foodflow
+      DB_USER: foodflow
+      DB_PASSWORD: ${DB_PASSWORD:-local-foodflow-only}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-FoodFlow-demo-2026!}
+      DEMO_OPERATIONS: "true"
+    depends_on:
+      mysql: {condition: service_healthy}
+    restart: unless-stopped
+  web:
+    build: .
+    ports: ["127.0.0.1:8081:80"]
+    depends_on: [backend]
+    restart: unless-stopped
+volumes:
+  mysql-data:
