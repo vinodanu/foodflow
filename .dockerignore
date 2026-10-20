@@ -2,5 +2,10 @@ node_modules
 dist
 backend
 .git
+.idea
+.env*
+*.log
 test-results
 preview-*.png
+target
+data
