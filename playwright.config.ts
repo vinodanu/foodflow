@@ -1,2 +1,9 @@
 import {defineConfig} from '@playwright/test';
-export default defineConfig({testDir:'./tests',use:{baseURL:'http://127.0.0.1:5176',browserName:'chromium'},webServer:{command:'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5176',url:'http://127.0.0.1:5176',reuseExistingServer:false}});
+
+const webPort=Number(process.env.FOODFLOW_TEST_WEB_PORT??5181);
+
+export default defineConfig({
+ testDir:'./tests',
+ globalSetup:'./tests/global-setup.mjs',
+ use:{baseURL:`http://127.0.0.1:${webPort}`,browserName:'chromium'},
+});

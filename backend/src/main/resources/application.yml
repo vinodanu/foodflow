@@ -19,6 +19,13 @@ spring:
 foodflow:
   demo-password: ${DEMO_PASSWORD:FoodFlow-demo-2026!}
   demo-operations: ${DEMO_OPERATIONS:true}
+  sandbox-payments: ${SANDBOX_PAYMENTS:true}
+  payment-webhook-secret: ${PAYMENT_WEBHOOK_SECRET:local-sandbox-payment-secret-change-me}
+  service-zone: ${SERVICE_ZONE:Asia/Kolkata}
+  restaurant:
+    timeout-scan-ms: ${RESTAURANT_TIMEOUT_SCAN_MS:15000}
+  delivery:
+    offer-scan-ms: ${DELIVERY_OFFER_SCAN_MS:5000}
 ---
 spring:
   config:

@@ -1,5 +1,5 @@
-export type Dish={id:string;name:string;description:string;price:number;veg:boolean};
-export type Restaurant={id:string;name:string;category:string;image:string;rating:string;time:string;price:number;tag:string;menu:Dish[]};
+export type Dish={id:string;name:string;description:string;price:number;veg:boolean;available?:boolean};
+export type Restaurant={id:string;name:string;category:string;image:string;rating:string;time:string;price:number;tag:string;menu:Dish[];preparationMinutes?:number};
 export const photo=(id:string)=>`/images/${id}.webp`;
 export const restaurants:Restaurant[]=[
  {id:'green',name:'The Green Bowl',category:'Healthy',image:photo('photo-1512621776951-a57141f2eefd'),rating:'4.8',time:'20–30',price:250,tag:'FEEL-GOOD FOOD',menu:[{id:'bowl',name:'Harvest grain bowl',description:'Roasted vegetables, brown rice, avocado & lemon tahini.',price:249,veg:true},{id:'salad',name:'Summer crunch salad',description:'Garden greens, chickpeas, cucumber & citrus dressing.',price:199,veg:true},{id:'smoothie',name:'Berry happy smoothie',description:'Berries, banana and creamy oat milk.',price:149,veg:true}]},
