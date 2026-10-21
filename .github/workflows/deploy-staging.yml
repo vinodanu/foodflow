@@ -80,8 +80,8 @@ jobs:
           fi
 
           if [[ -z "$stack_outputs" ]] || ! jq -e '
-            any(.[]; .OutputKey == "WebRepositoryUri" and (.OutputValue | length > 0)) and
-            any(.[]; .OutputKey == "ApiRepositoryUri" and (.OutputValue | length > 0))
+            any((. // [])[]; .OutputKey == "WebRepositoryUri" and ((.OutputValue // "") | length > 0)) and
+            any((. // [])[]; .OutputKey == "ApiRepositoryUri" and ((.OutputValue // "") | length > 0))
           ' <<< "$stack_outputs" >/dev/null; then
             echo 'Staging stack is missing ECR repository outputs; updating the bootstrap stack.'
             aws cloudformation deploy \
