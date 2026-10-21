@@ -412,7 +412,8 @@ Resources:
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
-      AlarmActions: [!Ref AlarmTopic]  DatabaseCpuAlarm:
+      AlarmActions: [!Ref AlarmTopic]
+  DatabaseCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: foodflow-staging-rds-cpu-high
@@ -459,6 +460,6 @@ Outputs:
     Value: !Ref DemoPasswordSecret
   AlertTopicArn:
     Value: !Ref AlarmTopic
-      AlarmActions: [!Ref AlarmTopic]
+  AlarmActions: [!Ref AlarmTopic]
   DatabaseCpuAlarm:
     Type: AWS::CloudWatch::Alarm
