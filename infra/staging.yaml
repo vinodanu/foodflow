@@ -1,0 +1,461 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: FoodFlow staging environment (HTTPS ALB, private ECS Fargate tasks, and private RDS MySQL).
+Parameters:
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN in this stack's Region, covering StagingDomainName.
+  StagingDomainName:
+    Type: String
+    Description: DNS hostname for the staging storefront, for example staging.example.com.
+  HostedZoneId:
+    Type: String
+    Description: Route 53 public hosted zone ID containing StagingDomainName.
+  ImageTag:
+    Type: String
+    Default: bootstrap
+    AllowedPattern: '[A-Za-z0-9_.-]{1,128}'
+    Description: Immutable tag used for both application images.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 2
+    Description: Set to 0 for initial infrastructure bootstrap before images are pushed.
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{Key: Name, Value: foodflow-staging}]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.42.0.0/20
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: foodflow-staging-public-a}]
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.42.16.0/20
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: foodflow-staging-public-b}]
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.42.128.0/20
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: foodflow-staging-private-a}]
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.42.144.0/20
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: foodflow-staging-private-b}]
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc}
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnetA, RouteTableId: !Ref PublicRouteTable}
+  PublicSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnetB, RouteTableId: !Ref PublicRouteTable}
+  NatAddress:
+    Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
+    Properties: {Domain: vpc}
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: PublicDefaultRoute
+    Properties:
+      AllocationId: !GetAtt NatAddress.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags: [{Key: Name, Value: foodflow-staging-nat}]
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc}
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+  PrivateSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateSubnetA, RouteTableId: !Ref PrivateRouteTable}
+  PrivateSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateSubnetB, RouteTableId: !Ref PrivateRouteTable}
+
+  WebRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: foodflow-staging-web
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: {ScanOnPush: true}
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep the newest 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: foodflow-staging-api
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: {ScanOnPush: true}
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep the newest 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: foodflow/staging/database
+      Description: FoodFlow staging RDS credentials.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"foodflow_app"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+  DemoPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: foodflow/staging/demo-password
+      Description: Shared demo password for seeded staging accounts only.
+      GenerateSecretString:
+        PasswordLength: 32
+        ExcludePunctuation: true
+  WebhookSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: foodflow/staging/payment-webhook-secret
+      Description: Sandbox callback signing secret for staging only.
+      GenerateSecretString:
+        PasswordLength: 48
+        ExcludePunctuation: true
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: FoodFlow staging MySQL accepts connections only from ECS tasks.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref TaskSecurityGroup
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets for FoodFlow staging database.
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      DBSubnetGroupName: foodflow-staging
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: foodflow-staging
+      Engine: mysql
+      DBName: foodflow
+      MasterUsername: foodflow_app
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups: [!GetAtt DatabaseSecurityGroup.GroupId]
+      Tags: [{Key: app, Value: foodflow}, {Key: environment, Value: staging}]
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: foodflow-staging
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+  TaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: FoodFlow staging ECS task traffic.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTPS ingress for FoodFlow staging.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadFoodFlowStagingSecrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref DemoPasswordSecret
+                  - !Ref WebhookSecret
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /foodflow/staging/api
+      RetentionInDays: 14
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /foodflow/staging/web
+      RetentionInDays: 14
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: foodflow-staging
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: backend
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${ApiRepository}:${ImageTag}'
+          Essential: true
+          Memory: 768
+          PortMappings: [{ContainerPort: 8090, Protocol: tcp}]
+          Environment:
+            - {Name: SPRING_PROFILES_ACTIVE, Value: 'mysql,staging'}
+            - {Name: DB_URL, Value: !Sub 'jdbc:mysql://${Database.Endpoint.Address}:3306/foodflow'}
+            - {Name: DB_USER, Value: foodflow_app}
+            - {Name: DEMO_OPERATIONS, Value: 'true'}
+            - {Name: SANDBOX_PAYMENTS, Value: 'true'}
+            - {Name: SERVICE_ZONE, Value: Asia/Kolkata}
+          Secrets:
+            - {Name: DB_PASSWORD, ValueFrom: !Sub '${DatabaseSecret}:password::'}
+            - {Name: DEMO_PASSWORD, ValueFrom: !Ref DemoPasswordSecret}
+            - {Name: PAYMENT_WEBHOOK_SECRET, ValueFrom: !Ref WebhookSecret}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: api
+        - Name: web
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${WebRepository}:${ImageTag}'
+          Essential: true
+          Memory: 256
+          PortMappings: [{ContainerPort: 80, Protocol: tcp}]
+          Environment:
+            - {Name: BACKEND_UPSTREAM, Value: '127.0.0.1:8090'}
+            - {Name: NGINX_ENVSUBST_FILTER, Value: '^BACKEND_UPSTREAM$'}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: foodflow-staging
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      SecurityGroups: [!GetAtt LoadBalancerSecurityGroup.GroupId]
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: foodflow-staging
+      VpcId: !Ref Vpc
+      TargetType: ip
+      Protocol: HTTP
+      Port: 80
+      HealthCheckEnabled: true
+      HealthCheckPath: /api/v1/health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher: {HttpCode: '200-399'}
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates: [{CertificateArn: !Ref CertificateArn}]
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref TargetGroup}]
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: HttpsListener
+    Properties:
+      ServiceName: foodflow-staging
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      HealthCheckGracePeriodSeconds: 120
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups: [!GetAtt TaskSecurityGroup.GroupId]
+          Subnets: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 80
+          TargetGroupArn: !Ref TargetGroup
+  StagingDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref StagingDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt LoadBalancer.DNSName
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: FoodFlow staging alerts
+      TopicName: foodflow-staging-alerts
+  ServiceCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: foodflow-staging-ecs-cpu-high
+      AlarmDescription: ECS staging service CPU has exceeded 85 percent.
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Dimensions:
+        - {Name: ClusterName, Value: !Ref Cluster}
+        - {Name: ServiceName, Value: foodflow-staging}
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  UnhealthyTargetsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: foodflow-staging-unhealthy-targets
+      AlarmDescription: The staging application load balancer has an unhealthy ECS target.
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - {Name: LoadBalancer, Value: !GetAtt LoadBalancer.LoadBalancerFullName}
+        - {Name: TargetGroup, Value: !GetAtt TargetGroup.TargetGroupFullName}
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]  DatabaseCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: foodflow-staging-rds-cpu-high
+      AlarmDescription: RDS staging CPU has exceeded 85 percent.
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions: [{Name: DBInstanceIdentifier, Value: !Ref Database}]
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  LoadBalancer5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: foodflow-staging-alb-5xx
+      AlarmDescription: Application load balancer has returned repeated 5xx responses.
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Dimensions: [{Name: LoadBalancer, Value: !GetAtt LoadBalancer.LoadBalancerFullName}]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+Outputs:
+  StagingUrl:
+    Description: HTTPS staging storefront URL.
+    Value: !Sub 'https://${StagingDomainName}'
+  LoadBalancerDnsName:
+    Description: ALB DNS name (useful for diagnosis; use StagingUrl for HTTPS).
+    Value: !GetAtt LoadBalancer.DNSName
+  WebRepositoryUri:
+    Value: !GetAtt WebRepository.RepositoryUri
+  ApiRepositoryUri:
+    Value: !GetAtt ApiRepository.RepositoryUri
+  DatabaseSecretArn:
+    Value: !Ref DatabaseSecret
+  DemoPasswordSecretArn:
+    Value: !Ref DemoPasswordSecret
+  AlertTopicArn:
+    Value: !Ref AlarmTopic
