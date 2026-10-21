@@ -459,3 +459,6 @@ Outputs:
     Value: !Ref DemoPasswordSecret
   AlertTopicArn:
     Value: !Ref AlarmTopic
+      AlarmActions: [!Ref AlarmTopic]
+  DatabaseCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
