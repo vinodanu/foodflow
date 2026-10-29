@@ -75,8 +75,15 @@ jobs:
           if aws cloudformation describe-stacks \
             --stack-name foodflow-staging \
             --query 'Stacks[0].Outputs' \
-            --output json > /tmp/foodflow-staging-outputs.json; then
+            --output json \
+            > /tmp/foodflow-staging-outputs.json \
+            2> /tmp/foodflow-staging-describe-error.txt; then
             stack_outputs="$(cat /tmp/foodflow-staging-outputs.json)"
+          elif grep -qi 'does not exist' /tmp/foodflow-staging-describe-error.txt; then
+            stack_outputs='[]'
+          else
+            cat /tmp/foodflow-staging-describe-error.txt >&2
+            exit 1
           fi
 
           if [[ -z "$stack_outputs" ]] || ! jq -e '
